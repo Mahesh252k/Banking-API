@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Mahesh252k/student-api/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -23,7 +24,7 @@ func main() {
 	if err := godotenv.Load(envPath); err != nil {
 		log.Printf("warning: could not load .env from %s: %v", envPath, err)
 	} else {
-		log.Println("sucessfully loaded .env file")
+		log.Println("successfully loaded .env file")
 	}
 
 	dsn := os.Getenv("DB_DSN")
@@ -42,8 +43,10 @@ func main() {
 		port = "8080" // default port
 	}
 
-	_ = db.Connect()
+	dbConn := db.Connect()
+	handlers.InitHandlers(dbConn)
 	r := gin.Default()
+	r.Use(gin.Logger()) //logging middleware
 
 	//CORS Middleware - applied globally for all routes
 	r.Use(corsMiddleware())
@@ -88,12 +91,12 @@ func authMiddleware() gin.HandlerFunc {
 
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer().Header().Set("Access-control-Allow-Origin", "***")
-		c.Writer().Header().Set("access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		c.Writer().Header().Set("Access-Control-Allow-Origin", "***")
+		c.Writer().Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		c.Writer().Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, X-Requested-With")
 		c.Writer().Header().Set("Access-Control-Allow-Credentials", "true")
 
-		//handle preflight options requests
+		//handle preflight OPTIONS requests
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return

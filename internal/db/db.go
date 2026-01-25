@@ -2,6 +2,7 @@ package db
 
 import (
 	"log"
+	"banking-api/internal/models"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -16,7 +17,7 @@ func Connect() *gorm.DB{
 	db, err:=gorm.Open(mysql.Open(dsn), &gorm.Config{})
 
 	if err !=nil{
-		log.Fatal("[Error] failed to intialize database, got error %v", err)
+		log.Fatalf("[Error] failed to intialize database, got error %v", err)
 	}
 
 	//Auto-Migrate models
