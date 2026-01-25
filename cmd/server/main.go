@@ -45,6 +45,9 @@ func main() {
 	_ = db.Connect()
 	r := gin.Default()
 
+	//CORS Middleware - applied globally for all routes
+	r.Use(corsMiddleware())
+
 	//public routes
 	r.POST("/auth/register", handlers.Register)
 	r.POST("/auth/login", handlers.Login)
@@ -77,6 +80,22 @@ func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.GetHeader("Authorization") == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		c.Next()
+	}
+}
+
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer().Header().Set("Access-control-Allow-Origin", "***")
+		c.Writer().Header().Set("access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		c.Writer().Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, X-Requested-With")
+		c.Writer().Header().Set("Access-Control-Allow-Credentials", "true")
+
+		//handle preflight options requests
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
 			return
 		}
 		c.Next()
