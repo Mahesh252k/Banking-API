@@ -1,12 +1,14 @@
 package main
 
 import (
+	"banking-api/internal/db"
+	"banking-api/internal/handlers"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 
-	"github.com/Mahesh252k/student-api/internal/db"
+	//"github.com/Mahesh252k/student-api/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -91,10 +93,10 @@ func authMiddleware() gin.HandlerFunc {
 
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer().Header().Set("Access-Control-Allow-Origin", "***")
-		c.Writer().Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		c.Writer().Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, X-Requested-With")
-		c.Writer().Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "***")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		//handle preflight OPTIONS requests
 		if c.Request.Method == "OPTIONS" {

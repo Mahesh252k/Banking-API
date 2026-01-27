@@ -1,17 +1,19 @@
 package handlers
 
 import (
-	"banking-api/internal/models"
 	"net/http"
+	"os/user"
 	"strconv"
+	"banking-api/internal/models"
 
 	"github.com/Mahesh252k/banking-api/internal/models"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"repositories"
-	"services"
+	"banking-api/internal/repositories"
+	"banking-api/internal/services"
+	"banking-api/internal/auth"
 )
 
 var dbConn *gorm.DB
@@ -193,7 +195,7 @@ func (s *AccountService) GetStatement(accountID int) ([]models.Transaction, erro
 	c.JSON(http.StatusOK, statement)
 }
 
-// Loans
+//Loans
 func CreateLoan(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	if userID == 0 {
@@ -206,4 +208,76 @@ func CreateLoan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	branchID := 1
+	loan, err := loanSvc.CreateLoan(&req, userID, branchID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"loan": loan, "message": "Loan created successfully"})
+}
+
+func ListLoans(c *gin.Context) {
+	userID := auth.GetUserID(c)
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Token"})
+		return
+	}
+	loans, err := loanSvc.ListLoans(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, loans)
+}
+
+func MakePayment(c *gin.Context) {
+	loanID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid loan id"})
+		return
+	}
+
+	var req models.LoanPaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := loanPaymentSvc.MakePayment(loanID, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}	
+	c.JSON(http.StatusOK, gin.H{"message": "Payment successful"})
+}
+
+func ListPayments(c *gin.Context) {
+	loanID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid loan id"})
+		return
+	}
+	payments, err := loanPaymentSvc.ListPayments(loanID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, payments)
+}
+
+//Beneficiaries
+func AddBeneficiary(c *gin.Context) {
+	userID := auth.GetUserID(c)
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Token"})
+		return
+	}
+
+	var req models.AddBeneficiaryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Beneficiary added successfully", "customer_id": userID})
 }
