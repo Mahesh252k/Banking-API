@@ -1,9 +1,8 @@
 package services
 
 import (
-	"banking-api/internal/models"
-	"banking-api/internal/repositories"
-
+	"github.com/Mahesh252k/banking-api/internal/models"
+	"github.com/Mahesh252k/banking-api/internal/repositories"
 	"gorm.io/gorm"
 )
 
@@ -44,32 +43,37 @@ func (s *accountService) Transfer(fromAccountID, toAccountID int, amount float64
 		if err != nil {
 			return err
 		}
+		toAcc, err := s.repo.GetByID(toAccountID)
+		if err != nil {
+			return err
+		}
 
 		if fromAcc.Balance < amount {
 			return models.ErrInsufficientFunds
 		}
 
-		_, err = s.repo.GetByID(toAccountID)
-		if err != nil {
+		// update balances in memory
+		fromAcc.Balance -= amount
+		toAcc.Balance += amount
+
+		// persist
+		if err := s.repo.UpdateBalance(fromAcc); err != nil {
+			return err
+		}
+		if err := s.repo.UpdateBalance(toAcc); err != nil {
 			return err
 		}
 
-		if err := s.repo.UpdateBalance(fromAccountID, fromAcc.Balance-amount); err != nil {
-			return err
-		}
-
-		if err := s.repo.UpdateBalance(toAccountID, fromAcc.Balance+amount); err != nil {
-			return err
-		}
-
-		fromTx := &models.Transaction{
-			fromAccountID: &fromAccountID,
+		// record transaction
+		txRecord := &models.Transaction{
+			FromAccountID: &fromAccountID,
 			ToAccountID:   &toAccountID,
 			Amount:        amount,
 		}
-		if err := s.txRepo.Create(fromTx); err != nil {
+		if err := s.txRepo.Create(txRecord); err != nil {
 			return err
 		}
+
 		return nil
 	})
 }
@@ -81,9 +85,11 @@ func (s *accountService) Deposit(accountID int, amount float64) error {
 			return err
 		}
 
-		if err := s.repo.UpdateBalance(account, account.Balance+amount); err != nil {
+		account.Balance += amount
+		if err := s.repo.UpdateBalance(account); err != nil {
 			return err
 		}
+
 		depositTx := &models.Transaction{
 			FromAccountID: nil,
 			ToAccountID:   &accountID,
@@ -99,7 +105,11 @@ func (s *accountService) Deposit(accountID int, amount float64) error {
 
 func (s *accountService) GetStatement(accountID int) ([]models.Transaction, error) {
 	var txns []models.Transaction
-	err := s.db.Where("from_account_id= ? OR to_account_id = ?", accountID, accountID).
-		Order("created_at_DESC").Limit(100).Find(&txns).Error
+	err := s.db.
+		Where("from_account_id = ? OR to_account_id = ?", accountID, accountID).
+		Order("created_at DESC").
+		Limit(100).
+		Find(&txns).Error
+
 	return txns, err
 }

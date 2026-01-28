@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Mahesh252k/student-api/internal/models"
-	"github.com/Mahesh252k/student-api/internal/repositories"
-	"github.com/Mahesh252k/student-api/internal/services"
-	"github.com/Mahesh252k/student-api/pkg/auth"
+	"github.com/Mahesh252k/banking-api/internal/models"
+	"github.com/Mahesh252k/banking-api/internal/repositories"
+	"github.com/Mahesh252k/banking-api/internal/services"
+	"github.com/Mahesh252k/banking-api/pkg/auth"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -23,11 +23,10 @@ var loanPaymentRepo repositories.LoanPaymentRepository
 var loanSvc services.LoanService
 var loanPaymentSvc services.LoanPaymentService
 
-// InitHandlers initialize all handlers with database connection
+// InitHandlers initializes all handlers with database connection
 func InitHandlers(db *gorm.DB) {
 	dbConn = db
 
-	//Init repo and services
 	accountRepo = repositories.NewAccountRepo(dbConn)
 	txRepo = repositories.NewTransactionRepo(dbConn)
 	accountSvc = services.NewAccountService(dbConn, accountRepo, txRepo)
@@ -35,10 +34,13 @@ func InitHandlers(db *gorm.DB) {
 	loanRepo = repositories.NewLoanRepo(dbConn)
 	loanPaymentRepo = repositories.NewLoanPaymentRepo(dbConn)
 	loanSvc = services.NewLoanService(dbConn, loanRepo, loanPaymentRepo)
-	loanPaymentSvc = services.NewLoanPaymentService(dbConn, loanPaymentRepo, loanRepo)
+
+	// correct order: (db, loanRepo, paymentRepo)
+	loanPaymentSvc = services.NewLoanPaymentService(dbConn, loanRepo, loanPaymentRepo)
 }
 
-// Auth
+// -------------------- AUTH --------------------
+
 func Register(c *gin.Context) {
 	var req models.RegisterCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -46,7 +48,12 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 14)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), 14)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+		return
+	}
+
 	customer := &models.Customer{
 		Username:     req.Username,
 		PasswordHash: string(hashed),
@@ -56,12 +63,18 @@ func Register(c *gin.Context) {
 		Phone:        req.Phone,
 		Address:      req.Address,
 	}
+
 	if err := dbConn.Create(customer).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	token, _ := auth.GenerateToken(customer.ID)
+	token, err := auth.GenerateToken(customer.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
 	c.JSON(http.StatusCreated, gin.H{"token": token})
 }
 
@@ -70,7 +83,6 @@ func Login(c *gin.Context) {
 		Username string `json:"username" binding:"required"`
 		Password string `json:"password" binding:"required"`
 	}
-
 	if err := c.ShouldBindJSON(&loginReq); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -78,30 +90,36 @@ func Login(c *gin.Context) {
 
 	var customer models.Customer
 	if err := dbConn.Where("username = ?", loginReq.Username).First(&customer).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(customer.PasswordHash), []byte(loginReq.Password)) != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+	if err := bcrypt.CompareHashAndPassword([]byte(customer.PasswordHash), []byte(loginReq.Password)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 
-	token, _ := auth.GenerateToken(customer.ID)
+	token, err := auth.GenerateToken(customer.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
-// Accounts
+// ACCOUNTS
+
 func CreateAccount(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	if userID == 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
 
 	var req models.CreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -117,11 +135,12 @@ func CreateAccount(c *gin.Context) {
 func ListAccounts(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	if userID == 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
 
-	accounts, err := accountRepo.ListByCustomer(userID)
+	// match your repo method name
+	accounts, err := accountRepo.ListByCustomerID(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -129,12 +148,10 @@ func ListAccounts(c *gin.Context) {
 	c.JSON(http.StatusOK, accounts)
 }
 
-//Transfer
-
 func Transfer(c *gin.Context) {
 	fromID, err := strconv.Atoi(c.Param("from_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid from_id"})
+	if err != nil || fromID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from_id"})
 		return
 	}
 
@@ -145,7 +162,7 @@ func Transfer(c *gin.Context) {
 	}
 
 	if req.ToAccountID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid to account_id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid to_account_id"})
 		return
 	}
 
@@ -154,19 +171,13 @@ func Transfer(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Transfer successful"})
+	c.JSON(http.StatusOK, gin.H{"message": "transfer successful"})
 }
 
-// Deposits
 func Deposit(c *gin.Context) {
 	accountID, err := strconv.Atoi(c.Param("account_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid account_id"})
-		return
-	}
-
-	if accountID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid account_id"})
+	if err != nil || accountID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account_id"})
 		return
 	}
 
@@ -180,30 +191,37 @@ func Deposit(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Deposit successful"})
+	c.JSON(http.StatusOK, gin.H{"message": "deposit successful"})
 }
 
-func (s *AccountService) GetStatement(accountID int) ([]models.Transaction, error) {
+// proper handler version (not service method)
+func GetStatement(c *gin.Context) {
 	accountID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid account_id"})
-		return nil, err
+	if err != nil || accountID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account_id"})
+		return
 	}
+
 	statement, err := accountSvc.GetStatement(accountID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, statement)
 }
 
-// Loans
+// LOANS
+
 func CreateLoan(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	if userID == 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
 
 	var req models.CreateLoanRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -213,15 +231,16 @@ func CreateLoan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"loan": loan, "message": "Loan created successfully"})
+	c.JSON(http.StatusCreated, loan)
 }
 
 func ListLoans(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	if userID == 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
+
 	loans, err := loanSvc.ListLoans(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -232,29 +251,33 @@ func ListLoans(c *gin.Context) {
 
 func MakePayment(c *gin.Context) {
 	loanID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid loan id"})
+	if err != nil || loanID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid loan id"})
 		return
 	}
 
-	var req models.LoanPaymentRequest
+	var req models.MakePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := loanPaymentSvc.MakePayment(loanID, &req); err != nil {
+
+	// service expects (paymentID, loanID)
+	if err := loanPaymentSvc.MakePayment(req.PaymentID, loanID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Payment successful"})
+
+	c.JSON(http.StatusOK, gin.H{"message": "payment successful"})
 }
 
 func ListPayments(c *gin.Context) {
 	loanID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid loan id"})
+	if err != nil || loanID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid loan id"})
 		return
 	}
+
 	payments, err := loanPaymentSvc.ListPayments(loanID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -263,11 +286,12 @@ func ListPayments(c *gin.Context) {
 	c.JSON(http.StatusOK, payments)
 }
 
-// Beneficiaries
+// BENEFICIARIES
+
 func AddBeneficiary(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	if userID == 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
 
@@ -277,5 +301,6 @@ func AddBeneficiary(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Beneficiary added successfully", "customer_id": userID})
+	// TODO: save beneficiary to DB via service/repo
+	c.JSON(http.StatusCreated, gin.H{"message": "beneficiary added successfully", "customer_id": userID})
 }

@@ -1,14 +1,14 @@
 package main
 
 import (
-	"banking-api/internal/db"
-	"banking-api/internal/handlers"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 
-	//"github.com/Mahesh252k/student-api/internal/db"
+	"github.com/Mahesh252k/banking-api/internal/db"
+	"github.com/Mahesh252k/banking-api/internal/handlers"
+
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -66,12 +66,12 @@ func main() {
 	protected.GET("/accounts", handlers.ListAccounts)
 	protected.POST("/transfers/:from_id", handlers.Transfer)
 	protected.POST("/deposits/:account_id", handlers.Deposit)
-	protected.POST("/accounts/:id/statement", handlers.GetStatements)
+	protected.POST("/accounts/:id/statement", handlers.GetStatement)
 
 	//Loans
 	protected.POST("/loans", handlers.CreateLoan)
 	protected.GET("/loans", handlers.ListLoans)
-	protected.POST("/loans/:id/repay", handlers.MakePayments)
+	protected.POST("/loans/:id/repay", handlers.MakePayment)
 	protected.POST("/loans/:id/payments", handlers.ListPayments)
 
 	//beneficiaries

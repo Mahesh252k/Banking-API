@@ -1,10 +1,11 @@
 package services
 
 import (
-	"banking-api/internal/models"
-	"banking-api/internal/repositories"
 	"errors"
 	"time"
+
+	"github.com/Mahesh252k/banking-api/internal/models"
+	"github.com/Mahesh252k/banking-api/internal/repositories"
 
 	"gorm.io/gorm"
 )
@@ -45,11 +46,11 @@ func (s *loanPaymentService) MakePayment(paymentID int, loanID int) error {
 		}
 
 		//Update LOAN IF All Paid
-		loan, err := s.loanRepo.GetByID(loanID)
+		payments, err := s.paymentRepo.ListByLoanID(loanID)
 		if err != nil {
-			return errors.New("loan not found")
+			return err
 		}
-		payments, _ := s.paymentRepo.ListByLoan(loanID)
+
 		paidCount := 0
 		for _, p := range payments {
 			if p.Status == "paid" {

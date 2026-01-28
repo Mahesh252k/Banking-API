@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"github.com/Mahesh252k/banking-api/internal/models"
-
 	"gorm.io/gorm"
 )
 
@@ -30,7 +29,6 @@ func (r *accountRepo) GetByID(id int) (*models.Account, error) {
 	if err := r.db.Preload("Customer").Preload("Branch").First(&account, id).Error; err != nil {
 		return nil, err
 	}
-
 	return &account, nil
 }
 
@@ -40,7 +38,9 @@ func (r *accountRepo) UpdateBalance(account *models.Account) error {
 
 func (r *accountRepo) ListByCustomerID(customerID int) ([]models.Account, error) {
 	var accounts []models.Account
-	if err := r.db.Preload("Customer").Preload("Branch").Where("customer_id = ?", customerID).Find(&accounts).Error; err != nil {
+	if err := r.db.Preload("Customer").Preload("Branch").
+		Where("customer_id = ?", customerID).
+		Find(&accounts).Error; err != nil {
 		return nil, err
 	}
 	return accounts, nil

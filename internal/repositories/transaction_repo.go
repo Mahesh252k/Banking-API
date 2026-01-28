@@ -1,7 +1,7 @@
 package repositories
 
 import (
-	"banking-api/internal/models"
+	"github.com/Mahesh252k/banking-api/internal/models"
 
 	"gorm.io/gorm"
 )
