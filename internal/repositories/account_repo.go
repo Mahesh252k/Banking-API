@@ -1,7 +1,7 @@
 package repositories
 
 import (
-	"banking-api/internal/models"
+	"github.com/Mahesh252k/banking-api/internal/models"
 
 	"gorm.io/gorm"
 )
@@ -11,6 +11,10 @@ type AccountRepository interface {
 	GetByID(id int) (*models.Account, error)
 	UpdateBalance(account *models.Account) error
 	ListByCustomerID(customerID int) ([]models.Account, error)
+}
+
+type accountRepo struct {
+	db *gorm.DB
 }
 
 func NewAccountRepo(db *gorm.DB) AccountRepository {

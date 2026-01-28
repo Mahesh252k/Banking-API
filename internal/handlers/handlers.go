@@ -2,18 +2,16 @@ package handlers
 
 import (
 	"net/http"
-	"os/user"
 	"strconv"
-	"banking-api/internal/models"
 
-	"github.com/Mahesh252k/banking-api/internal/models"
+	"github.com/Mahesh252k/student-api/internal/models"
+	"github.com/Mahesh252k/student-api/internal/repositories"
+	"github.com/Mahesh252k/student-api/internal/services"
+	"github.com/Mahesh252k/student-api/pkg/auth"
+
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-
-	"banking-api/internal/repositories"
-	"banking-api/internal/services"
-	"banking-api/internal/auth"
 )
 
 var dbConn *gorm.DB
@@ -195,7 +193,7 @@ func (s *AccountService) GetStatement(accountID int) ([]models.Transaction, erro
 	c.JSON(http.StatusOK, statement)
 }
 
-//Loans
+// Loans
 func CreateLoan(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	if userID == 0 {
@@ -247,7 +245,7 @@ func MakePayment(c *gin.Context) {
 	if err := loanPaymentSvc.MakePayment(loanID, &req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
-	}	
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Payment successful"})
 }
 
@@ -265,7 +263,7 @@ func ListPayments(c *gin.Context) {
 	c.JSON(http.StatusOK, payments)
 }
 
-//Beneficiaries
+// Beneficiaries
 func AddBeneficiary(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	if userID == 0 {
