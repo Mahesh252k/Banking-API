@@ -83,6 +83,12 @@ type LoanPayment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type CreateLoanRequest struct {
+	Amount       float64 `json:"amount" binding:"required,gt=0"`
+	InterestRate float64 `json:"interest_rate" binding:"required,gt=0"`
+	TermsMonths  int     `json:"terms_months" binding:"required,gt=0"`
+}
+
 type Beneficiary struct {
 	ID            int    `gorm:"primaryKey;autoIncrement;type:int" json:"id"`
 	CustomerID    int    `json:"customer_id" gorm:"type:int;index"`
