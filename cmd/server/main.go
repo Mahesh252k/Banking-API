@@ -20,21 +20,29 @@ func main() {
 		log.Fatal("cannot get working directory:", err)
 	}
 
-	// Always load .env from project root (2 levels up from cmd/server)
-	projectRoot := filepath.Clean(filepath.Join(dir, "..", ".."))
-	envPath := filepath.Join(projectRoot, ".env")
+	candidates := []string{
+		filepath.Join(dir, ".env"),
+		filepath.Join(dir, "..", ".env"),
+		filepath.Join(dir, "..", "..", ".env"),
+	}
 
-	log.Printf("Loading environment variables from %s", envPath)
+	loaded := false
+	for _, p := range candidates {
+		log.Printf("Loading environment variables from %s", p)
+		if err := godotenv.Overload(p); err == nil {
+			log.Println("successfully loaded .env file")
+			loaded = true
+			break
+		} else {
+			log.Printf("warning: could not load .env from %s: %v", p, err)
+		}
+	}
 
-	if err := godotenv.Overload(envPath); err != nil {
-		log.Printf("warning: could not load .env from %s: %v", envPath, err)
-	} else {
-		log.Println("successfully loaded .env file")
+	if !loaded {
+		log.Println("warning: .env file was not loaded from any known location")
 	}
 
 	dsn := os.Getenv("DB_DSN")
-	log.Printf("DB user check: %s", dsn) // TEMP debug (remove later)
-
 	jwtSecret := os.Getenv("JWT_SECRET")
 	port := os.Getenv("PORT")
 
@@ -52,34 +60,35 @@ func main() {
 
 	dbConn := db.Connect()
 	handlers.InitHandlers(dbConn)
-	r := gin.Default()
-	r.Use(gin.Logger()) //logging middleware
 
-	//CORS Middleware - applied globally for all routes
+	r := gin.Default()
+	r.Use(gin.Logger()) // logging middleware
+
+	// CORS Middleware - applied globally for all routes
 	r.Use(corsMiddleware())
 
-	//public routes
+	// public routes
 	r.POST("/auth/register", handlers.Register)
 	r.POST("/auth/login", handlers.Login)
 
-	//protected routes
+	// protected routes
 	protected := r.Group("")
 	protected.Use(authMiddleware())
 
-	//accounts
+	// accounts
 	protected.POST("/accounts", handlers.CreateAccount)
 	protected.GET("/accounts", handlers.ListAccounts)
 	protected.POST("/transfers/:from_id", handlers.Transfer)
 	protected.POST("/deposits/:account_id", handlers.Deposit)
 	protected.POST("/accounts/:id/statement", handlers.GetStatement)
 
-	//Loans
+	// loans
 	protected.POST("/loans", handlers.CreateLoan)
 	protected.GET("/loans", handlers.ListLoans)
 	protected.POST("/loans/:id/repay", handlers.MakePayment)
 	protected.POST("/loans/:id/payments", handlers.ListPayments)
 
-	//beneficiaries
+	// beneficiaries
 	protected.POST("/beneficiaries", handlers.AddBeneficiary)
 
 	log.Printf("server starting on %s", port)
@@ -103,7 +112,7 @@ func corsMiddleware() gin.HandlerFunc {
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 
-		//handle preflight OPTIONS requests
+		// handle preflight OPTIONS requests
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
