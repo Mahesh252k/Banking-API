@@ -20,16 +20,21 @@ func main() {
 		log.Fatal("cannot get working directory:", err)
 	}
 
-	envPath := filepath.Join(dir, ".env")
+	// Always load .env from project root (2 levels up from cmd/server)
+	projectRoot := filepath.Clean(filepath.Join(dir, "..", ".."))
+	envPath := filepath.Join(projectRoot, ".env")
+
 	log.Printf("Loading environment variables from %s", envPath)
 
-	if err := godotenv.Load(envPath); err != nil {
+	if err := godotenv.Overload(envPath); err != nil {
 		log.Printf("warning: could not load .env from %s: %v", envPath, err)
 	} else {
 		log.Println("successfully loaded .env file")
 	}
 
 	dsn := os.Getenv("DB_DSN")
+	log.Printf("DB user check: %s", dsn) // TEMP debug (remove later)
+
 	jwtSecret := os.Getenv("JWT_SECRET")
 	port := os.Getenv("PORT")
 
@@ -42,7 +47,7 @@ func main() {
 	}
 
 	if port == "" {
-		port = "8080" // default port
+		port = "8080"
 	}
 
 	dbConn := db.Connect()
