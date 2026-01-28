@@ -15,8 +15,8 @@ type AccountService interface {
 }
 
 type accountService struct {
-	db *gorm.DB
-	repo repositories.AccountRepository
+	db     *gorm.DB
+	repo   repositories.AccountRepository
 	txRepo repositories.TransactionRepository
 }
 
@@ -26,20 +26,20 @@ func NewAccountService(db *gorm.DB, repo repositories.AccountRepository, txRepo 
 
 func (s *accountService) CreateAccount(req *models.CreateAccountRequest, customerID, branchID int) (*models.Account, error) {
 	account := &models.Account{
-		CustomerID: customerID,	
+		CustomerID: customerID,
 		BranchID:   branchID,
-		Owner:	 req.Owner,
+		Owner:      req.Owner,
 		Currency:   req.Currency,
 		Balance:    0.0,
 	}
 	if err := s.repo.Create(account); err != nil {
 		return nil, err
-	}			
+	}
 	return account, nil
 }
 
-func (s *accountService) Transfer(fromAccountID, toAccountID int, amount float64) error{
-	return s.db.Transaction(func(tx *gorm.DB) error{
+func (s *accountService) Transfer(fromAccountID, toAccountID int, amount float64) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		fromAcc, err := s.repo.GetByID(fromAccountID)
 		if err != nil {
 			return err
@@ -49,19 +49,18 @@ func (s *accountService) Transfer(fromAccountID, toAccountID int, amount float64
 			return models.ErrInsufficientFunds
 		}
 
-		_,err=s.repo.GetByID(toAccountID)
+		_, err = s.repo.GetByID(toAccountID)
 		if err != nil {
 			return err
 		}
 
-		if err:= s.repo.UpdateBalance(fromAccountID, fromAcc.Balance - amount); err != nil {
+		if err := s.repo.UpdateBalance(fromAccountID, fromAcc.Balance-amount); err != nil {
 			return err
 		}
 
-		if err:= s.repo.UpdateBalance(toAccountID, fromAcc.Balance + amount); err != nil {
+		if err := s.repo.UpdateBalance(toAccountID, fromAcc.Balance+amount); err != nil {
 			return err
 		}
-
 
 		fromTx := &models.Transaction{
 			fromAccountID: &fromAccountID,
@@ -71,5 +70,36 @@ func (s *accountService) Transfer(fromAccountID, toAccountID int, amount float64
 		if err := s.txRepo.Create(fromTx); err != nil {
 			return err
 		}
+		return nil
 	})
+}
+
+func (s *accountService) Deposit(accountID int, amount float64) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		account, err := s.repo.GetByID(accountID)
+		if err != nil {
+			return err
+		}
+
+		if err := s.repo.UpdateBalance(account, account.Balance+amount); err != nil {
+			return err
+		}
+		depositTx := &models.Transaction{
+			FromAccountID: nil,
+			ToAccountID:   &accountID,
+			Amount:        amount,
+		}
+		if err := s.txRepo.Create(depositTx); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+func (s *accountService) GetStatement(accountID int) ([]models.Transaction, error) {
+	var txns []models.Transaction
+	err := s.db.Where("from_account_id= ? OR to_account_id = ?", accountID, accountID).
+		Order("created_at_DESC").Limit(100).Find(&txns).Error
+	return txns, err
 }

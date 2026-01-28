@@ -64,3 +64,7 @@ func (s *loanPaymentService) MakePayment(paymentID int, loanID int) error {
 		return nil
 	})
 }
+
+func (s *loanPaymentService) ListPayments(loanID int) ([]models.LoanPayment, error) {
+	return s.paymentRepo.ListByLoanID(loanID)
+}
