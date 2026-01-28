@@ -25,27 +25,24 @@ func NewLoanService(db *gorm.DB, loanRepo repositories.LoanRepository, paymentRe
 	return &loanService{db: db, loanRepo: loanRepo, paymentRepo: paymentRepo}
 }
 
-func calculateEMI(prinicipal, monthlyRate float64, months int) float64 {
-	if months == 0 {
+// annualRate is like 10 for 10%
+func calculateEMI(principal, annualRate float64, months int) float64 {
+	if months <= 0 {
 		return 0
 	}
-	r := monthlyRate / 12
-
-	if r == 0 {
-		return prinicipal / float64(months)
+	monthlyRate := (annualRate / 100) / 12
+	if monthlyRate == 0 {
+		return principal / float64(months)
 	}
-
-	power := math.Pow(1+r, float64(months))
-	emi := prinicipal * r * power / (power - 1)
-	return emi
+	power := math.Pow(1+monthlyRate, float64(months))
+	return principal * monthlyRate * power / (power - 1)
 }
 
 func (s *loanService) CreateLoan(req *models.CreateLoanRequest, customerID, branchID int) (*models.Loan, error) {
 	var loan *models.Loan
+
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		//calculate total payable
-		monthlyRate := req.InterestRate
-		emi := calculateEMI(req.Amount, monthlyRate, req.TermsMonths)
+		emi := calculateEMI(req.Amount, req.InterestRate, req.TermsMonths)
 		totalPayable := emi * float64(req.TermsMonths)
 
 		loan = &models.Loan{
@@ -63,9 +60,9 @@ func (s *loanService) CreateLoan(req *models.CreateLoanRequest, customerID, bran
 		if err := s.loanRepo.Create(loan); err != nil {
 			return err
 		}
-		//generate payment (equal EMI)
-		for i := 0; i < req.TermsMonths; i++ {
-			dueDate := time.Now().AddDate(0, i, 0) //monthly
+
+		for i := 1; i <= req.TermsMonths; i++ {
+			dueDate := time.Now().AddDate(0, i, 0)
 			payment := &models.LoanPayment{
 				LoanID:  loan.ID,
 				Amount:  emi,
@@ -73,16 +70,14 @@ func (s *loanService) CreateLoan(req *models.CreateLoanRequest, customerID, bran
 				Status:  "pending",
 			}
 			if err := s.paymentRepo.Create(payment); err != nil {
-				return err // rollback on failure
+				return err
 			}
 		}
 
-		//Reload with payments
 		fullLoan, err := s.loanRepo.GetByID(loan.ID)
 		if err != nil {
 			return err
 		}
-
 		loan = fullLoan
 		return nil
 	})
