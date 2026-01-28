@@ -2,31 +2,23 @@ package db
 
 import (
 	"log"
+	"os"
 
-	"github.com/Mahesh252k/banking-api/internal/models"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
 func Connect() *gorm.DB {
-	dsn := ""
-
+	dsn := os.Getenv("DB_DSN")
 	if dsn == "" {
 		log.Fatal("DB_DSN not loaded. Ensure .env is loaded")
 	}
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-
 	if err != nil {
-		log.Fatalf("[Error] failed to intialize database, got error %v", err)
+		log.Fatalf("failed to connect to database: %v", err)
 	}
 
-	//Auto-Migrate models
-	err = db.AutoMigrate(&models.Customer{}, &models.Branch{}, &models.Account{}, &models.Transaction{}, &models.LoanPayment{}, &models.AddBeneficiaryRequest{}, &models.Loan{})
-	if err != nil {
-		log.Fatalf("Automigrated failed: %v", err)
-	}
-
-	log.Println("Database connected and migrated successfully")
+	log.Println("Database connected successfully")
 	return db
 }
